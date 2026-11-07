@@ -237,6 +237,56 @@ $MenuChecks = [ordered]@{
             }
         }
     }
+
+    "12" = @{
+        Title = "Registry Key Checks"
+        Run = {
+            Invoke-Check -Title "REMOTE ACCESS REGISTRY SETTINGS" `
+                -FileName "remote-access-registry" -Check {
+                
+                $Checks = @(
+                    @{
+                        Name = "RDP"
+                        Path = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server"
+                        Value = "fDenyTSConnections"
+                    },
+                    @{
+                        Name = "RDP NLA"
+                        Path = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp"
+                        Value = "UserAuthentication"
+                    },
+                    @{
+                        Name = "Remote Registry Service"
+                        Path = "HKLM:\SYSTEM\CurrentControlSet\Services\RemoteRegistry"
+                        Value = "Start"
+                    },
+                    @{
+                        Name = "SMB1 Server"
+                        Path = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters"
+                        Value = "SMB1"
+                    }
+                )
+
+                foreach ($Check in $Checks) {
+                    $Value = Get-ItemPropertyValue `
+                        -Path $Check.Path `
+                        -Name $Check.Value `
+                        -ErrorAction SilentlyContinue
+                    
+                    [PSCustomObject]@{
+                        Setting = $Check.Name
+                        RegistryPath = $Check.Path
+                        ValueName = $Check.Value
+                        Value = if ($null -eq $Value) {
+                            "(not set)"
+                        } else {
+                            $Value
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 while ($true) {
