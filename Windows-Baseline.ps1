@@ -239,49 +239,137 @@ $MenuChecks = [ordered]@{
     }
 
     "12" = @{
-        Title = "Registry Key Checks"
+        Title = "Registry Security Configuration"
         Run = {
-            Invoke-Check -Title "REMOTE ACCESS REGISTRY SETTINGS" `
-                -FileName "remote-access-registry" -Check {
+            Invoke-Check -Title "REGISTRY SECURITY CONFIGURATION" `
+                -FileName "registry-security" -Check {
                 
-                $Checks = @(
+                $RegistryChecks = @(
                     @{
-                        Name = "RDP"
+                        Name = "RDP Connections"
                         Path = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server"
                         Value = "fDenyTSConnections"
+                        Expected = "1 (RDP disabled)"
+                        SecureValue = 1
+                        Meaning = "RDP disabled is most restrictive; 0 enables RDP"
                     },
                     @{
-                        Name = "RDP NLA"
+                        Name = "RDP Network Level Authentication"
                         Path = "HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp"
                         Value = "UserAuthentication"
+                        Expected = "1 (NLA required)"
+                        SecureValue = 1
+                        Meaning = "NLA should be required when RDP is enabled"
                     },
                     @{
                         Name = "Remote Registry Service"
                         Path = "HKLM:\SYSTEM\CurrentControlSet\Services\RemoteRegistry"
                         Value = "Start"
+                        Expected = "4 (Disabled)"
+                        SecureValue = 4
+                        Meaning = "3 (Manual) may be appropriate if required"
                     },
                     @{
-                        Name = "SMB1 Server"
-                        Path = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters"
-                        Value = "SMB1"
+                        Name = "WinRM Service Basic Authentication"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service"
+                        Value = "AllowBasic"
+                        Expected = "0 (Disabled)"
+                        SecureValue = 0
+                        Meaning = "Basic authentication should generally be disabled"
+                    },
+                    @{
+                        Name = "WinRM Service Unencrypted Traffic"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service"
+                        Value = "AllowUnencryptedTraffic"
+                        Expected = "0 (Disabled)"
+                        SecureValue = 0
+                        Meaning = "Unencrypted WinRM traffic should not be allowed"
+                    },
+                    @{
+                        Name = "WinRM Client Basic Authentication"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client"
+                        Value = "AllowBasic"
+                        Expected = "0 (Disabled)"
+                        SecureValue = 0
+                        Meaning = "Basic authentication should generally be disabled"
+                    },
+                    @{
+                        Name = "WinRM Client Unencrypted Traffic"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Client"
+                        Value = "AllowUnencryptedTraffic"
+                        Expected = "0 (Disabled)"
+                        SecureValue = 0
+                        Meaning = "Unencrypted WinRM traffic should not be allowed"
+                    },
+                    @{
+                        Name = "Powershell Script Block Logging"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging"
+                        Value = "EnableScriptBlockLogging"
+                        Expected = "1 (Enabled)"
+                        SecureValue = 1
+                        Meaning = "Logs PowerShell script block activity"
+                    },
+                    @{
+                        Name = "Powershell Module Logging"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging"
+                        Value = "EnableModuleLogging"
+                        Expected = "1 (Enabled)"
+                        SecureValue = 1
+                        Meaning = "Logs PowerShell module activity"
+                    },
+                    @{
+                        Name = "Powershell Transcription"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription"
+                        Value = "EnableTranscripting"
+                        Expected = "1 (Enabled)"
+                        SecureValue = 1
+                        Meaning = "Records PowerShell session transcripts"
+                    },
+                    @{
+                        Name = "Winlogon Shell"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Winlogon"
+                        Value = "Shell"
+                        Expected = "explorer.exe"
+                        SecureValue = "explorer.exe"
+                        Meaning = "Unexpected shell executable may indicate persistence"
+                    },
+                    @{
+                        Name = "Winlogon Userinit"
+                        Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\Winlogon"
+                        Value = "Userinit"
+                        Expected = "$env:SystemRoot\System32\userinit.exe"
+                        SecureValue = "$env:SystemRoot\System32\userinit.exe"
+                        Meaning = "Unexpected executable or path may indicate persistence"
                     }
                 )
 
-                foreach ($Check in $Checks) {
-                    $Value = Get-ItemPropertyValue `
+                foreach ($Check in $RegistryChecks) {
+                    $Observed = Get-ItemPropertyValue `
                         -Path $Check.Path `
                         -Name $Check.Value `
                         -ErrorAction SilentlyContinue
                     
+                    if ($null -eq $Observed) {
+                        $Status = "NOT SET - REVIEW"
+                        $ObservedText = "(not set)"
+                    }
+                    elseif ([string]$Observed -eq [string]$Check.SecureValue) {
+                        $Status = "OK"
+                        $ObservedText = [string]$Observed
+                    }
+                    else {
+                        $Status = "REVIEW"
+                        $ObservedText = [string]$Observed
+                    }
+
                     [PSCustomObject]@{
                         Setting = $Check.Name
+                        ObservedValue = $ObservedText
+                        ExpectedValue = $Check.Expected
+                        Status = $Status
+                        Notes = $Check.Meaning
                         RegistryPath = $Check.Path
                         ValueName = $Check.Value
-                        Value = if ($null -eq $Value) {
-                            "(not set)"
-                        } else {
-                            $Value
-                        }
                     }
                 }
             }
