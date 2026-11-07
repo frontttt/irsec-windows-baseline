@@ -2,7 +2,7 @@
 # Reusable script for all windows machines to capture baseline
 
 $ErrorActionPreference = "Continue"
-$RunTime = Get-Date -Format "yyyMMdd_HHmmss"
+$RunTime = Get-Date -Format "yyyyMMdd_HHmmss"
 $ReportDirectory = Join-Path $PSScriptRoot "BaselineReports"
 $RunDirectory = Join-Path $ReportDirectory $RunTime
 
@@ -16,7 +16,7 @@ try {
     $TranscriptStarted = $true
 }
 catch {
-    Write-Warning "Could not start transcript: $($_.Execption.Message)"
+    Write-Warning "Could not start transcript: $($_.Exception.Message)"
 }
 
 Write-Host "`nWindows Baseline Report" -ForegroundColor Green
@@ -55,7 +55,7 @@ function Invoke-Check {
         Write-Host "Saved: $CsvPath" -ForegroundColor DarkGray
     }
     catch {
-        Write-Host "CHECK FAILED: $($_.Execption.Message)" `
+        Write-Host "CHECK FAILED: $($_.Exception.Message)" `
             -ForegroundColor Yellow
     }
 }
@@ -121,7 +121,7 @@ $MenuChecks = [ordered]@{
                             LocalAddress = $Connection.LocalAddress
                             LocalPort = $Connection.LocalPort
                             PID = $Connection.OwningProcess
-                            ProcesName = if ($Process) {
+                            ProcessName = if ($Process) {
                                 $Process.ProcessName
                             } else {
                                 "Unknown or inaccessible"
@@ -239,8 +239,62 @@ $MenuChecks = [ordered]@{
     }
 }
 
-Write-Host "`n=== BASELINE COMPLETE ===" -ForegroundColor Green
-Write-Host "Report folder: $RunDirectory"
+while ($true) {
+    Clear-Host
+
+    Write-Host "========== WINDOWS BASELINE MENU ==========" `
+        -ForegroundColor Green
+    Write-Host "Computer: $env:COMPUTERNAME"
+    Write-Host "Report folder: $RunDirectory"
+    Write-Host ""
+
+    foreach ($Key in $MenuChecks.Keys) {
+        Write-Host ("{0, 2}. {1}" -f $Key, $MenuChecks[$Key].Title)
+    }
+
+    Write-Host ""
+    Write-Host " A. Run All Checks"
+    Write-Host " 0. Exit"
+    Write-Host ""
+
+    $Choice = (Read-Host "Enter your choice").Trim().ToUpper()
+
+    if ($Choice -eq "0") {
+        break
+    }
+
+    if ($Choice -eq "A") {
+        foreach ($Key in $MenuChecks.Keys) {
+            & $MenuChecks[$Key].Run
+        }
+
+        Read-Host "`nAll checks complete. Press Enter to return to menu"
+        continue
+    }
+
+    $Selections = $Choice -split "," |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -ne "" }
+    
+    $InvalidChoices = @(
+        $Selections | Where-Object { $_ -notin $MenuChecks.Keys }
+    )
+
+    if ($InvalidChoices.Count -gt 0 -or $Selections.Count -eq 0) {
+        Write-Host "Invalid choice. Please select a menu number." `
+            -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+        continue
+    }
+
+    foreach ($Selection in $Selections) {
+        & $MenuChecks[$Selection].Run
+    }
+
+    Read-Host "`nCheck complete. Press Enter to reutn to menu"
+}
+
+Write-Host "`nExiting Windows Baseline." -ForegroundColor Green
 
 if ($TranscriptStarted) {
     Stop-Transcript | Out-Null
